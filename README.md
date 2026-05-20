@@ -2,6 +2,8 @@
 
 An emoji-glyph dungeon crawler in C# / .NET 10. Procedural rooms-and-corridors maps, persistent multi-level dungeons, fog of war, bump-to-attack melee combat, ranged magic via wands, a boss requiring magic or enchanted steel, and endless descent for high scores. No external dependencies — just `System.Console`.
 
+![Game in progress on depth 1 — the witch 🧙 stands in a corridor with a healing potion 🧪 and a dagger 🗡️ nearby, stairs down `>>` to the south. Sidebar shows status, key bindings, and equipped gear.](screenshot.jpg)
+
 ---
 
 ## Run
