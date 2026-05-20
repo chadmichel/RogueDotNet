@@ -1,4 +1,4 @@
-# CLAUDE.md
+# Agents.md
 
 ## Project
 
@@ -19,27 +19,19 @@ The game reads keys from the console, so run it in a real terminal (not a buffer
 
 High scores persist to `highscores.txt` in the working directory, one entry per line as `score|depth|kills|date(ISO 8601)`.
 
-## Layout
+## Folder Structure
 
 ```
 Program.cs           bootstrap
 Game.cs              main loop, input dispatch, combat/turn orchestration
 Entities/
-  Entity.cs          base: X, Y, Glyph, Color, Name
-  Player.cs          HP, BaseAttack, Depth, Kills, Inventory; Attack = base + equipped weapon
-  Monster.cs         HP, Attack
-  MonsterFactory.cs  weighted spawn table, gated by depth
+  Game entity objects with position, health, etc.  
 Items/
-  Item.cs            Item, ItemEntity, ItemFactory (~65% potion / ~35% weapon)
-  Inventory.cs       list + EquippedWeapon, capacity 20
+  Inventory items with type/kind and use effects
 Map/
-  Tile.cs            Wall / Floor / StairsDown + Visible/Explored flags
-  DungeonLevel.cs    Tile[,] grid + monster/item lists + spawn/stairs coords
-  MapGenerator.cs    room-and-corridor generator (up to 30 rooms, L-shaped tunnels)
-  Fov.cs             360-ray symmetric FOV, radius set by Game.FovRadius (8)
+  Map generator and tile definitions
 UI/
-  Renderer.cs        double-buffered, dirty-cell flush; fixed 60x18 map + 20 sidebar + 5 log
-  MessageLog.cs      ring buffer of last MaxMessages entries (default 4)
+  Game rendering for inventory/game-over screens
 ```
 
 ## Core loop (`Game.Run`)

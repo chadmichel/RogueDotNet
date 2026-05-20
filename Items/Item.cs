@@ -1,15 +1,26 @@
 namespace Rogue.Items;
 
-public enum ItemKind { HealingPotion, Weapon }
+public enum ItemKind { HealingPotion, Weapon, Wand }
 
 public class Item
 {
     public string Name { get; set; } = "";
-    public char Glyph { get; set; }
+    public string Glyph { get; set; } = "??";
     public ConsoleColor Color { get; set; }
     public ItemKind Kind { get; set; }
     public int HealAmount { get; set; }
     public int AttackBonus { get; set; }
+    public bool IsEnchanted { get; set; }
+    public int Charges { get; set; }
+    public int WandDamage { get; set; }
+    public int WandRange { get; set; }
+
+    public string DisplayName => (Kind, IsEnchanted) switch
+    {
+        (ItemKind.Weapon, true) => $"enchanted {Name}",
+        (ItemKind.Wand, _) => $"{Name} ({Charges})",
+        _ => Name
+    };
 }
 
 public class ItemEntity
@@ -26,12 +37,26 @@ public static class ItemFactory
     public static ItemEntity Create(int x, int y, int depth, Random rng)
     {
         var ie = new ItemEntity { X = x, Y = y };
-        if (rng.Next(100) < 65)
+
+        if (depth >= 2 && rng.Next(100) < 15)
+        {
+            ie.Item = new Item
+            {
+                Name = "wand of fireball",
+                Glyph = "🪄",
+                Color = ConsoleColor.Magenta,
+                Kind = ItemKind.Wand,
+                WandDamage = 8 + depth / 3,
+                WandRange = 6,
+                Charges = 3 + rng.Next(3)
+            };
+        }
+        else if (rng.Next(100) < 55)
         {
             ie.Item = new Item
             {
                 Name = "healing potion",
-                Glyph = '!',
+                Glyph = "🧪",
                 Color = ConsoleColor.Red,
                 Kind = ItemKind.HealingPotion,
                 HealAmount = 10 + rng.Next(6)
@@ -44,7 +69,7 @@ public static class ItemFactory
             ie.Item = new Item
             {
                 Name = WeaponNames[idx],
-                Glyph = '/',
+                Glyph = "🗡️",
                 Color = ConsoleColor.Cyan,
                 Kind = ItemKind.Weapon,
                 AttackBonus = bonus

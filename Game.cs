@@ -14,14 +14,16 @@ public class Game
     private readonly Renderer _renderer = new();
     private readonly MessageLog _log = new();
     private readonly Player _player = new();
+    private readonly Dictionary<int, DungeonLevel> _levels = new();
     private DungeonLevel _level = null!;
     private bool _quit;
+    private bool _bossSpawned;
 
     public void Run()
     {
         Console.CursorVisible = false;
         Console.Clear();
-        GenerateLevel();
+        EnterLevel(1, fromAbove: true);
         _log.Add($"Welcome to the dungeon. Depth {_player.Depth}.", ConsoleColor.Yellow);
 
         while (!_quit && _player.IsAlive)
@@ -49,28 +51,61 @@ public class Game
         }
     }
 
-    private void GenerateLevel()
+    private void EnterLevel(int depth, bool fromAbove)
     {
-        var gen = new MapGenerator(_rng);
-        _level = gen.Generate(Renderer.MapWidth, Renderer.MapHeight, _player.Depth);
-        _player.X = _level.PlayerSpawn.X;
-        _player.Y = _level.PlayerSpawn.Y;
+        if (!_levels.TryGetValue(depth, out var level))
+        {
+            var gen = new MapGenerator(_rng);
+            level = gen.Generate(Renderer.MapWidth, Renderer.MapHeight, depth, !_bossSpawned);
+            _levels[depth] = level;
+            if (level.Monsters.Any(m => m.IsBoss))
+            {
+                _bossSpawned = true;
+                _log.Add("An ominous presence stalks this floor...", ConsoleColor.DarkRed);
+            }
+        }
+        _level = level;
+        _player.Depth = depth;
+
+        if (depth > _player.MaxDepth)
+        {
+            _player.MaxDepth = depth;
+            if (depth > 1)
+            {
+                int heal = Math.Min(5, _player.MaxHp - _player.Hp);
+                _player.Hp += heal;
+            }
+        }
+
+        (int X, int Y) spawn;
+        if (!fromAbove)
+            spawn = _level.StairsDown;
+        else if (_level.HasStairsUp)
+            spawn = _level.StairsUp;
+        else
+            spawn = _level.PlayerSpawn;
+
+        _player.X = spawn.X;
+        _player.Y = spawn.Y;
+        _player.UpdateAppearance();
     }
 
     private bool HandleInput(ConsoleKeyInfo key)
     {
         switch (key.Key)
         {
-            case ConsoleKey.UpArrow:    return TryMove(0, -1);
-            case ConsoleKey.DownArrow:  return TryMove(0, 1);
-            case ConsoleKey.LeftArrow:  return TryMove(-1, 0);
+            case ConsoleKey.UpArrow: return TryMove(0, -1);
+            case ConsoleKey.DownArrow: return TryMove(0, 1);
+            case ConsoleKey.LeftArrow: return TryMove(-1, 0);
             case ConsoleKey.RightArrow: return TryMove(1, 0);
         }
         switch (key.KeyChar)
         {
             case 'g': case 'G': return TryPickUp();
             case 'i': case 'I': ShowInventory(); return false;
-            case '>':           return TryDescend();
+            case '>': return TryDescend();
+            case '<': return TryAscend();
+            case 'z': case 'Z': return TryZap();
             case 'q': case 'Q': _quit = true; return false;
         }
         return false;
@@ -90,16 +125,48 @@ public class Game
 
         _player.X = nx;
         _player.Y = ny;
+
+        TryUseFountain(nx, ny);
+
         var here = _level.ItemAt(nx, ny);
         if (here != null)
-            _log.Add($"You see a {here.Item.Name} here. (press g)", ConsoleColor.Cyan);
+            _log.Add($"You see a {here.Item.DisplayName} here. (press g)", ConsoleColor.Cyan);
         if (_level.Tiles[nx, ny].Type == TileType.StairsDown)
             _log.Add("Stairs lead down here. (press >)", ConsoleColor.Yellow);
+        else if (_level.Tiles[nx, ny].Type == TileType.StairsUp)
+            _log.Add("Stairs lead up here. (press <)", ConsoleColor.Yellow);
         return true;
+    }
+
+    private void TryUseFountain(int x, int y)
+    {
+        if (_level.Tiles[x, y].Type != TileType.Fountain) return;
+
+        var weapon = _player.Inventory.EquippedWeapon;
+        if (weapon == null)
+        {
+            _log.Add("A fountain hums with magic, but you have no weapon equipped.", ConsoleColor.Yellow);
+            return;
+        }
+        if (weapon.IsEnchanted)
+        {
+            _log.Add($"The fountain's power has already blessed your {weapon.DisplayName}.", ConsoleColor.DarkGray);
+            return;
+        }
+
+        weapon.IsEnchanted = true;
+        _player.UpdateAppearance();
+        _log.Add($"Your {weapon.DisplayName} glows with enchantment!", ConsoleColor.Cyan);
     }
 
     private void AttackMonster(Monster m)
     {
+        if (m.IsBoss && _player.Inventory.EquippedWeapon?.IsEnchanted != true)
+        {
+            _log.Add($"Your attack glances off the {m.Name}. Only enchanted steel can harm it!", ConsoleColor.Yellow);
+            return;
+        }
+
         int dmg = Math.Max(1, _player.Attack + _rng.Next(-1, 2));
         m.Hp -= dmg;
         _log.Add($"You hit the {m.Name} for {dmg}.", ConsoleColor.White);
@@ -125,7 +192,7 @@ public class Game
             return false;
         }
         _level.Items.Remove(ie);
-        _log.Add($"You pick up the {ie.Item.Name}.", ConsoleColor.Cyan);
+        _log.Add($"You pick up the {ie.Item.DisplayName}.", ConsoleColor.Cyan);
         return true;
     }
 
@@ -151,13 +218,14 @@ public class Game
                 {
                     ItemKind.HealingPotion => $"heals {item.HealAmount}",
                     ItemKind.Weapon => $"+{item.AttackBonus} atk",
+                    ItemKind.Wand => $"{item.WandDamage} dmg, range {item.WandRange}",
                     _ => ""
                 };
-                string equipped = item == _player.Inventory.EquippedWeapon ? " (equipped)" : "";
+                string equipped = item == _player.Inventory.EquippedWeapon || item == _player.Inventory.EquippedWand ? " (equipped)" : "";
                 Console.ForegroundColor = item.Color;
                 Console.Write($"  {letter}) ");
                 Console.ForegroundColor = ConsoleColor.Gray;
-                Console.WriteLine($"{item.Name} [{detail}]{equipped}");
+                Console.WriteLine($"{item.DisplayName} [{detail}]{equipped}");
             }
         }
         Console.ResetColor();
@@ -176,14 +244,20 @@ public class Game
                 int healed = Math.Min(item.HealAmount, _player.MaxHp - _player.Hp);
                 _player.Hp += healed;
                 _log.Add(healed > 0
-                    ? $"You drink the {item.Name}. (+{healed} HP)"
-                    : $"You drink the {item.Name}. No effect.",
+                    ? $"You drink the {item.DisplayName}. (+{healed} HP)"
+                    : $"You drink the {item.DisplayName}. No effect.",
                     ConsoleColor.Green);
                 _player.Inventory.Remove(item);
+                _player.UpdateAppearance();
                 break;
             case ItemKind.Weapon:
                 _player.Inventory.EquippedWeapon = item;
-                _log.Add($"You equip the {item.Name}.", ConsoleColor.Cyan);
+                _player.UpdateAppearance();
+                _log.Add($"You equip the {item.DisplayName}.", ConsoleColor.Cyan);
+                break;
+            case ItemKind.Wand:
+                _player.Inventory.EquippedWand = item;
+                _log.Add($"You ready the {item.DisplayName}.", ConsoleColor.Magenta);
                 break;
         }
     }
@@ -192,14 +266,106 @@ public class Game
     {
         if (_level.Tiles[_player.X, _player.Y].Type != TileType.StairsDown)
         {
-            _log.Add("No stairs here.", ConsoleColor.DarkGray);
+            _log.Add("No stairs down here.", ConsoleColor.DarkGray);
             return false;
         }
-        _player.Depth++;
-        int heal = Math.Min(5, _player.MaxHp - _player.Hp);
-        _player.Hp += heal;
-        GenerateLevel();
+        EnterLevel(_player.Depth + 1, fromAbove: true);
         _log.Add($"You descend to depth {_player.Depth}.", ConsoleColor.Yellow);
+        return true;
+    }
+
+    private bool TryZap()
+    {
+        var wand = _player.Inventory.EquippedWand;
+        if (wand == null)
+        {
+            _log.Add("You have no wand readied.", ConsoleColor.DarkGray);
+            return false;
+        }
+        if (wand.Charges <= 0)
+        {
+            _log.Add($"The {wand.Name} is spent.", ConsoleColor.DarkGray);
+            return false;
+        }
+
+        _log.Add("Zap which direction? (arrow keys)", ConsoleColor.Magenta);
+        Fov.Compute(_level, _player.X, _player.Y, FovRadius);
+        _renderer.Render(_level, _player, _log);
+
+        var dirKey = Console.ReadKey(true);
+        int dx = 0, dy = 0;
+        switch (dirKey.Key)
+        {
+            case ConsoleKey.UpArrow:    dy = -1; break;
+            case ConsoleKey.DownArrow:  dy =  1; break;
+            case ConsoleKey.LeftArrow:  dx = -1; break;
+            case ConsoleKey.RightArrow: dx =  1; break;
+            default:
+                _log.Add("You hold the wand. Nothing happens.", ConsoleColor.DarkGray);
+                return false;
+        }
+
+        FireFireball(wand, dx, dy);
+        wand.Charges--;
+        return true;
+    }
+
+    private void FireFireball(Item wand, int dx, int dy)
+    {
+        int x = _player.X;
+        int y = _player.Y;
+        for (int step = 0; step < wand.WandRange; step++)
+        {
+            x += dx;
+            y += dy;
+            if (!_level.InBounds(x, y))
+            {
+                _log.Add("The fireball flies off into the dark.", ConsoleColor.DarkGray);
+                return;
+            }
+            if (!_level.Tiles[x, y].IsWalkable)
+            {
+                _renderer.DrawTransient(x, y, "🔥", ConsoleColor.Red);
+                Thread.Sleep(60);
+                _log.Add("The fireball bursts against the wall.", ConsoleColor.Red);
+                return;
+            }
+
+            _renderer.DrawTransient(x, y, "🔥", ConsoleColor.Red);
+            Thread.Sleep(40);
+
+            var m = _level.MonsterAt(x, y);
+            if (m != null)
+            {
+                int dmg = wand.WandDamage + _rng.Next(-1, 2);
+                m.Hp -= dmg;
+                _log.Add($"The fireball hits the {m.Name} for {dmg}!", ConsoleColor.Red);
+                if (!m.IsAlive)
+                {
+                    _log.Add($"You burn the {m.Name} to ash!", ConsoleColor.Green);
+                    _player.Kills++;
+                    _level.Monsters.Remove(m);
+                }
+                return;
+            }
+        }
+        _log.Add("The fireball fizzles in the air.", ConsoleColor.DarkGray);
+    }
+
+    private bool TryAscend()
+    {
+        if (_level.Tiles[_player.X, _player.Y].Type != TileType.StairsUp)
+        {
+            _log.Add("No stairs up here.", ConsoleColor.DarkGray);
+            return false;
+        }
+        if (_player.Depth <= 1)
+        {
+            _log.Add("You cannot leave the dungeon yet.", ConsoleColor.Yellow);
+            return false;
+        }
+        EnterLevel(_player.Depth - 1, fromAbove: false);
+        _log.Add($"You ascend to depth {_player.Depth}.", ConsoleColor.Yellow);
         return true;
     }
 
@@ -265,13 +431,13 @@ public class Game
         Console.WriteLine("    ##############################");
         Console.ForegroundColor = ConsoleColor.White;
         Console.WriteLine();
-        Console.WriteLine($"    You reached depth {_player.Depth}.");
+        Console.WriteLine($"    You reached depth {_player.MaxDepth}.");
         Console.WriteLine($"    Slain monsters: {_player.Kills}");
         Console.WriteLine($"    Final score:    {_player.Score}");
         Console.WriteLine();
 
         var scores = LoadScores();
-        var entry = (score: _player.Score, depth: _player.Depth, kills: _player.Kills, date: DateTime.Now);
+        var entry = (score: _player.Score, depth: _player.MaxDepth, kills: _player.Kills, date: DateTime.Now);
         scores.Add(entry);
         scores = scores.OrderByDescending(s => s.score).Take(10).ToList();
         SaveScores(scores);

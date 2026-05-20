@@ -1,6 +1,6 @@
 namespace Rogue.Map;
 
-public enum TileType { Wall, Floor, StairsDown }
+public enum TileType { Wall, Floor, StairsDown, StairsUp, Fountain }
 
 public struct Tile
 {

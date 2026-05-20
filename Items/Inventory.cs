@@ -4,6 +4,7 @@ public class Inventory
 {
     public List<Item> Items { get; } = new();
     public Item? EquippedWeapon { get; set; }
+    public Item? EquippedWand { get; set; }
     public int Capacity { get; } = 20;
 
     public bool Add(Item item)
@@ -17,5 +18,6 @@ public class Inventory
     {
         Items.Remove(item);
         if (EquippedWeapon == item) EquippedWeapon = null;
+        if (EquippedWand == item) EquippedWand = null;
     }
 }

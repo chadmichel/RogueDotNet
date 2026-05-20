@@ -8,7 +8,7 @@ public class MapGenerator
     private readonly Random _rng;
     public MapGenerator(Random rng) { _rng = rng; }
 
-    public DungeonLevel Generate(int width, int height, int depth)
+    public DungeonLevel Generate(int width, int height, int depth, bool allowBossSpawn)
     {
         var level = new DungeonLevel(width, height);
         var rooms = new List<Room>();
@@ -53,8 +53,31 @@ public class MapGenerator
         level.Tiles[stairs.X, stairs.Y].Type = TileType.StairsDown;
         level.StairsDown = stairs;
 
+        if (depth > 1)
+        {
+            var stairsUp = rooms[0].Center;
+            level.Tiles[stairsUp.X, stairsUp.Y].Type = TileType.StairsUp;
+            level.StairsUp = stairsUp;
+            level.HasStairsUp = true;
+        }
+
+        bool shouldSpawnBoss = allowBossSpawn && depth > 3 && _rng.Next(100) < 15;
+        if (shouldSpawnBoss && rooms.Count > 1)
+        {
+            int roomIndex = _rng.Next(1, rooms.Count);
+            var (bx, by) = rooms[roomIndex].RandomPoint(_rng);
+            level.Monsters.Add(MonsterFactory.CreateBoss(bx, by));
+        }
+
         for (int i = 1; i < rooms.Count; i++)
         {
+            if (_rng.Next(100) < 20)
+            {
+                var (fx, fy) = rooms[i].RandomPoint(_rng);
+                if ((fx, fy) != stairs)
+                    level.Tiles[fx, fy].Type = TileType.Fountain;
+            }
+
             int monsterCount = _rng.Next(0, 2 + depth / 2);
             for (int j = 0; j < monsterCount; j++)
             {
@@ -62,7 +85,13 @@ public class MapGenerator
                 if (level.MonsterAt(mx, my) == null && (mx, my) != stairs)
                     level.Monsters.Add(MonsterFactory.Create(mx, my, depth, _rng));
             }
-            if (_rng.Next(100) < 35)
+            if (_rng.Next(100) < 60)
+            {
+                var (ix, iy) = rooms[i].RandomPoint(_rng);
+                if (level.ItemAt(ix, iy) == null)
+                    level.Items.Add(ItemFactory.Create(ix, iy, depth, _rng));
+            }
+            if (_rng.Next(100) < 20)
             {
                 var (ix, iy) = rooms[i].RandomPoint(_rng);
                 if (level.ItemAt(ix, iy) == null)
