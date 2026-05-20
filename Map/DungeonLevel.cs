@@ -12,6 +12,7 @@ public class DungeonLevel
     public List<ItemEntity> Items { get; } = new();
     public (int X, int Y) StairsDown { get; set; }
     public (int X, int Y) PlayerSpawn { get; set; }
+    public bool StairsLocked { get; set; }
 
     public DungeonLevel(int width, int height)
     {
