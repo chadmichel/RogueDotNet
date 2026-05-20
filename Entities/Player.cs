@@ -17,8 +17,8 @@ public class Player : Entity
 
     public Player()
     {
-        Glyph = '@';
-        Color = ConsoleColor.White;
-        Name = "you";
+        Glyph = "🏃";
+        Color = ConsoleColor.Cyan;
+        Name = "rogue";
     }
 }

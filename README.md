@@ -15,16 +15,31 @@ Requires a real terminal (≥ **80×23**). The game uses `Console.ReadKey`, whic
 | Key      | Action                          |
 | -------- | ------------------------------- |
 | Arrows   | Move (bump a monster to attack) |
-| `g`      | Pick up item under you          |
+| `Enter`  | Pick up item under you          |
+| `f`      | Fire gun at adjacent primate    |
 | `i`      | Open inventory (letter to use)  |
 | `>`      | Descend stairs                  |
 | `q`      | Quit                            |
 
 ## Glyphs
 
-`@` you · `#` wall · `.` floor · `>` stairs down · `!` potion · `/` weapon · `r g o T W` monsters (rat → goblin → orc → troll → wraith)
+`🏃` rogue · `▓/▒` wall · `·/.` floor · `>` stairs down · `!` potion · `+` green energy · `/` weapon · `🔫` fire gun · `🐀 g o T W` monsters (rat → goblin → orc → troll → wraith) · `😈` evil primate
 
 Bright tiles are in your field of view; dim tiles are explored but currently unseen.
+
+## Visual Style
+
+The terminal presentation uses a denser dungeon texture, a side panel with HP and gate status, and strong character colors: cyan for the player, magenta for the evil primate, and muted dungeon tones for the map.
+
+## Primate Gate
+
+Before play, the game shows a rule list one line at a time. Press `Enter` to reveal the next rule; the final `Enter` launches the dungeon.
+
+Stand on a weapon and press `Enter` to collect it. Regular weapons equip automatically when they increase your attack power.
+
+Stand on a green `+` and press `Enter` to restore 50% of your maximum energy. Descending to the next level restores your energy to full.
+
+The first stairway is sealed. After you kill two rats, a stationary evil primate appears on the path to the stairs and blocks the narrow way forward. A `🔫` fire gun appears nearby; stand on it and press `Enter` to collect and equip it. Stand next to the evil primate and press `f` to shoot fire; the third fire blast kills it, unlocks the next level, and records the current score in `highscores.txt`.
 
 ## Architecture
 
@@ -126,7 +141,7 @@ Map/
 Entities/
   Entity.cs           abstract base
   Player.cs           HP, attack, depth, kills, score, inventory
-  Monster.cs          HP, attack
+  Monster.cs          HP, attack, monster kind, optional hit-count health
   MonsterFactory.cs   depth-weighted spawn table
 Items/
   Item.cs             Item + ItemEntity + ItemFactory
